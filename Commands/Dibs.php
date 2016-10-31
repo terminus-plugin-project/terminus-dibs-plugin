@@ -87,7 +87,7 @@ class SiteDibsCommand extends TerminusCommand {
     }
 
     // Call dibs.
-    $this->output()->outputValue($this->callDibs($assoc_args), 'Called Dibs On');
+    $this->output()->outputValue($this->callDibs($assoc_args), 'Called dibs on');
   }
 
   /**
