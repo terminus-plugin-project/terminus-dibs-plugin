@@ -94,10 +94,10 @@ class SiteDibsCommand extends TerminusCommand {
    * Un-dibs a site environment.
    *
    * [--site=<site>]
-   * : Name of the site for which you want to dibs an environment. (Required)
+   * : Name of the site for which you want to un-dibs an environment. (Required)
    *
    * [--env=<env>]
-   * : The specific environment you would like to dibs if you know which environment you want ahead of time. (Required)
+   * : The specific environment you would like to un-dibs. (Required)
    *
    * @subcommand undibs
    *
