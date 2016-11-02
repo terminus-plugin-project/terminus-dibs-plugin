@@ -203,6 +203,10 @@ class SiteDibsCommand extends TerminusCommand {
       if ($this->someoneAlreadyCalledDibsOn($site, $env)) {
         unset($matches[$key]);
       }
+      // If this environment isn't fully spun-up, don't dibs it.
+      if (!$this->envIsReady($site, $env)) {
+        unset($matches[$key]);
+      }
     }
     return array_pop($matches);
   }
@@ -270,6 +274,26 @@ class SiteDibsCommand extends TerminusCommand {
   }
 
   /**
+   * Returns whether or not the given site environment is fully set up.
+   *
+   * @param Terminus\Models\Site $site
+   * @param string $env
+   *
+   * @return bool
+   *   TRUE if the environment is ready (fully cloned and available, as far as
+   *   we know).
+   */
+  protected function envIsReady($site, $env) {
+    $mysqlCommand = $this->getMySqlCommand(['site' => $site->get('name'), 'env' => $env]);
+    // Check to see if "watchdog" and "wp_users" tables exist. These tables seem
+    // to be standard across frameworks/versions and are very far toward the end
+    // of table names alphabetically.
+    $checkStatusCmd = $mysqlCommand . ' -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=\'pantheon\' AND TABLE_NAME IN (\'watchdog\', \'wp_users\');"';
+    $response = (int) exec($checkStatusCmd . ' 2> /dev/null', $output, $status);
+    return $response > 0;
+  }
+
+  /**
    * Returns the SFTP command to connect to a given site/env.
    *
    * @param array $assoc_args
@@ -279,6 +303,18 @@ class SiteDibsCommand extends TerminusCommand {
   protected function getSftpCommand($assoc_args) {
     $info = $this->getSiteInfo($assoc_args);
     return $info['sftp_command'];
+  }
+
+  /**
+   * Returns the MySQL command to connect to a given site/env.
+   *
+   * @param array $assoc_args
+   *
+   * @return string
+   */
+  protected function getMySqlCommand($assoc_args) {
+    $info = $this->getSiteInfo($assoc_args);
+    return $info['mysql_command'];
   }
 
   /**
