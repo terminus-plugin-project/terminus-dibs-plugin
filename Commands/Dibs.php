@@ -290,12 +290,7 @@ class SiteDibsCommand extends TerminusCommand {
     // of table names alphabetically.
     $checkStatusCmd = $mysqlCommand . ' -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=\'pantheon\' AND TABLE_NAME IN (\'watchdog\', \'wp_users\');"';
     $response = (int) exec($checkStatusCmd . ' 2> /dev/null', $output, $status);
-    if ($response > 0) {
-      return TRUE;
-    }
-    else {
-      return FALSE;
-    }
+    return $response > 0;
   }
 
   /**
