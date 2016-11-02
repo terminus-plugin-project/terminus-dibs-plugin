@@ -83,6 +83,10 @@ terminus site dibs --site=your-site --filter='^((?!^(dev|test|live)$).)*$'
 The above command would call dibs on a multidev, ignoring the `dev`, `test`, and
 `live` environments.
 
+Note: In both cases where no specific environment is provided, only those
+environments that are fully spun-up are dibs'able. If you need to dibs an
+environment as it is being spun up, specify the environment name.
+
 
 ## Use-cases
 
