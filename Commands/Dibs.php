@@ -13,6 +13,7 @@ use Terminus\Exceptions\TerminusException;
 class SiteDibsCommand extends TerminusCommand {
 
   protected $sites;
+  protected $site;
   protected $info;
 
   private $version = '0.1.0';
@@ -68,13 +69,13 @@ class SiteDibsCommand extends TerminusCommand {
     }
 
     // Set up defaults.
+    $this->site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
     $env = isset($assoc_args['env']) ? $assoc_args['env'] : NULL;
     $filter = isset($assoc_args['filter']) ? $assoc_args['filter'] : '^((?!^live$).)*$';
 
     // If no environment was provided, try to pick an environment.
     if (empty($env)) {
-      $site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
-      $env = $this->getEnvToDib($site, $filter);
+      $env = $this->getEnvToDib($filter);
 
       // If we found one, great! Set it up.
       if (!empty($env)) {
@@ -112,6 +113,9 @@ class SiteDibsCommand extends TerminusCommand {
       throw new TerminusException('You must specify a site name (--site) and environment (--env).', [], 1);
     }
 
+    // Set up defaults.
+    $this->site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
+
     // Undibs the environment by invoking takesies-backsies.
     $this->output()->outputValue($this->takesiesBacksies($assoc_args), "Undibs'd");
   }
@@ -128,10 +132,8 @@ class SiteDibsCommand extends TerminusCommand {
    * @throws \Terminus\Exceptions\TerminusException
    */
   protected function callDibs($assoc_args) {
-    $site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
-
     // Make sure no one's already called dibs on this site.
-    if ($who = $this->someoneAlreadyCalledDibsOn($site, $assoc_args['env'])) {
+    if ($who = $this->someoneAlreadyCalledDibsOn($assoc_args['env'])) {
       throw new TerminusException('{Who} already called dibs on {env}.', [
         'Who' => $who === exec('whoami') ? 'You' : $who,
         'env' => $assoc_args['env'],
@@ -193,42 +195,35 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Returns an environment to call dibs on, given a regex filter.
    *
-   * @param Terminus\Models\Site $site
    * @param string $regex
    *
    * @return string|NULL
    *   The as-yet undib'd environment, or NULL if all environments have already
    *   been spoken-for.
    */
-  protected function getEnvToDib($site, $regex) {
-    $environments = new Environments(['site' => $site]);
+  protected function getEnvToDib($regex) {
+    $environments = new Environments(['site' => $this->site]);
     $matches = preg_grep('/' . $regex . '/', $environments->ids());
 
     foreach ($matches as $key => $env) {
-      // If someone already dibs'd it, we can't dibs it. Them's the rules.
-      if ($this->someoneAlreadyCalledDibsOn($site, $env)) {
-        unset($matches[$key]);
-      }
-      // If this environment isn't fully spun-up, don't dibs it.
-      if (!$this->envIsReady($site, $env)) {
-        unset($matches[$key]);
+      // If no one's called dibs and the environment is ready, return fast!
+      if (!$this->someoneAlreadyCalledDibsOn($env) && $this->envIsReady($env)) {
+        return $env;
       }
     }
 
-    // Array seems to be ordered by time of creation/modification. Pull older.
-    return array_shift($matches);
+    // If we're here, then we're out of luck. Nothing left to dibs.
+    return NULL;
   }
 
   /**
    * Attempts to return the public file directory for the given site.
    *
-   * @param Terminus\Models\Site $site
-   *
    * @return string
    *   A slash-prefixed path representing the site's public directory.
    */
-  protected function getEnvPublicDirectoryFor($site) {
-    if ($site->get('framework') === 'wordpress') {
+  protected function getEnvPublicDirectoryForThisSite() {
+    if ($this->site->get('framework') === 'wordpress') {
       return '/wp-content/uploads';
     }
     else {
@@ -253,8 +248,6 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Returns the user who called dibs on a site/env.
    *
-   * @param Terminus\Models\Site $site
-   *   The site to check.
    * @param string $env
    *   The env to check.
    *
@@ -262,9 +255,9 @@ class SiteDibsCommand extends TerminusCommand {
    *   Returns an empty string of dibs hasn't been called on the given site/env.
    *   If someone HAS called dibs, it will return the user who did.
    */
-  protected function someoneAlreadyCalledDibsOn($site, $env) {
-    $pubDir = $this->getEnvPublicDirectoryFor($site);
-    $url = 'http://' . $env . '-' .$site->get('name');
+  protected function someoneAlreadyCalledDibsOn($env) {
+    $pubDir = $this->getEnvPublicDirectoryForThisSite();
+    $url = 'http://' . $env . '-' . $this->site->get('name');
     $url .= '.pantheonsite.io' . $pubDir . '/__dibs.json';
     $url .= '?cb=' . mt_rand();
     $dibsFile = $this->getRemoteDibsFile($url);
@@ -284,15 +277,14 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Returns whether or not the given site environment is fully set up.
    *
-   * @param Terminus\Models\Site $site
    * @param string $env
    *
    * @return bool
    *   TRUE if the environment is ready (fully cloned and available, as far as
    *   we know).
    */
-  protected function envIsReady($site, $env) {
-    $mysqlCommand = $this->getMySqlCommand(['site' => $site->get('name'), 'env' => $env]);
+  protected function envIsReady($env) {
+    $mysqlCommand = $this->getMySqlCommand(['site' => $this->site->get('name'), 'env' => $env]);
     // Check to see if "watchdog" and "wp_users" tables exist. These tables seem
     // to be standard across frameworks/versions and are very far toward the end
     // of table names alphabetically.
@@ -341,11 +333,10 @@ class SiteDibsCommand extends TerminusCommand {
    *   An associative array of site information.
    */
   protected function getSiteInfo($assoc_args) {
-    $site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
-    $env_id = $this->input()->env(['args' => $assoc_args, 'site' => $site]);
+    $env_id = $assoc_args['env'];
 
     if (!isset($this->info[$env_id])) {
-      $environment = $site->environments->get($env_id);
+      $environment = $this->site->environments->get($env_id);
       $this->info[$env_id] = $environment->connectionInfo();
     }
 
