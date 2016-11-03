@@ -33,6 +33,16 @@ Called dibs on: dev
 If you or anyone else on your team attempt to call dibs on `dev` again, you'll
 see an error message.
 
+### Providing a message
+
+Let your colleagues know why you dibs'd your environment by providing a message!
+
+```sh
+terminus site dibs --site=your-site --env=test --message="Testing new homepage layout"
+```
+
+When someone attempts to dibs the same environment, they'll see your note.
+
 ### Un-dibs'ing an environment
 
 Once you're done using your environment, you can _undibs_ it by running the

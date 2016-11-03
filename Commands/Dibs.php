@@ -46,6 +46,9 @@ class SiteDibsCommand extends TerminusCommand {
    * [--env=<env>]
    * : The specific environment you would like to dibs if you know which environment you want ahead of time. (Optional)
    *
+   * [--message=<message>]
+   * : A message about why you're dibs'ing the environment. (Optional)
+   *
    * [--filter=<regex>]
    * : A regex pattern used to filter the pool of environments you are willing to dibs. Defaults to anything but live. (Optional)
    *
@@ -133,10 +136,12 @@ class SiteDibsCommand extends TerminusCommand {
    */
   protected function callDibs($assoc_args) {
     // Make sure no one's already called dibs on this site.
-    if ($who = $this->someoneAlreadyCalledDibsOn($assoc_args['env'])) {
-      throw new TerminusException('{Who} already called dibs on {env}.', [
-        'Who' => $who === exec('whoami') ? 'You' : $who,
+    if ($existingDibs = $this->getDibsFor($assoc_args['env'])) {
+      throw new TerminusException('{Who} already called dibs on {env} on {date}: {message}', [
+        'Who' => $existingDibs['by'] === exec('whoami') ? 'You' : $existingDibs['by'],
         'env' => $assoc_args['env'],
+        'date' => date('D M jS \a\t h:ia', $existingDibs['at']),
+        'message' => $existingDibs['message'],
       ], 1);
     }
 
@@ -146,7 +151,13 @@ class SiteDibsCommand extends TerminusCommand {
     chdir($workdir);
 
     // First, write a dibs file with some metadata.
-    $dibs = ['by' => exec('whoami'), 'at' => time(), 'for' => $assoc_args['env']];
+    $message = isset($assoc_args['message']) ? $assoc_args['message'] : 'Dibs!';
+    $dibs = [
+      'by' => exec('whoami'),
+      'at' => time(),
+      'for' => $assoc_args['env'],
+      'message' => $message,
+    ];
     $put_succeeded = file_put_contents('__dibs.json', json_encode($dibs));
 
     // Exit early for local failures.
@@ -207,7 +218,7 @@ class SiteDibsCommand extends TerminusCommand {
 
     foreach ($matches as $key => $env) {
       // If no one's called dibs and the environment is ready, return fast!
-      if (!$this->someoneAlreadyCalledDibsOn($env) && $this->envIsReady($env)) {
+      if (!$this->getDibsFor($env) && $this->envIsReady($env)) {
         return $env;
       }
     }
@@ -251,11 +262,11 @@ class SiteDibsCommand extends TerminusCommand {
    * @param string $env
    *   The env to check.
    *
-   * @return string
-   *   Returns an empty string of dibs hasn't been called on the given site/env.
-   *   If someone HAS called dibs, it will return the user who did.
+   * @return array
+   *   Returns an empty array if dibs hasn't been called on the given site/env.
+   *   If someone HAS called dibs, it will return the dibs array.
    */
-  protected function someoneAlreadyCalledDibsOn($env) {
+  protected function getDibsFor($env) {
     $pubDir = $this->getEnvPublicDirectoryForThisSite();
     $url = 'http://' . $env . '-' . $this->site->get('name');
     $url .= '.pantheonsite.io' . $pubDir . '/__dibs.json';
@@ -264,13 +275,13 @@ class SiteDibsCommand extends TerminusCommand {
 
     // If there's no dibs file, it hasn't been dibs'd.
     if (empty($dibsFile)) {
-      return '';
+      return [];
     }
     // Otherwise, make sure the dibs file matches the env name. If there's a
     // mismatch, then it's possible someone cloned from a dibs'd environment.
     else {
-      $dibsFile = json_decode($dibsFile);
-      return $dibsFile->for === $env ? $dibsFile->by : '';
+      $dibsFile = json_decode($dibsFile, TRUE);
+      return $dibsFile['for'] === $env ? $dibsFile : [];
     }
   }
 
