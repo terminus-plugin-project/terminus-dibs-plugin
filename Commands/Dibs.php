@@ -145,7 +145,12 @@ class SiteDibsCommand extends TerminusCommand {
 
     // First, write a dibs file with some metadata.
     $dibs = ['by' => exec('whoami'), 'at' => time(), 'for' => $assoc_args['env']];
-    file_put_contents('__dibs.json', json_encode($dibs));
+    $put_succeeded = file_put_contents('__dibs.json', json_encode($dibs));
+
+    // Exit early for local failures.
+    if ($put_succeeded === FALSE) {
+      throw new TerminusException('Could not write dibs.json to local temp file.', [], 1);
+    }
 
     // Upload __dibs.json, if possible
     exec("(echo 'cd files' && echo 'put __dibs.json') | $sftpCommand 2> /dev/null", $output, $status);
@@ -198,6 +203,7 @@ class SiteDibsCommand extends TerminusCommand {
   protected function getEnvToDib($site, $regex) {
     $environments = new Environments(['site' => $site]);
     $matches = preg_grep('/' . $regex . '/', $environments->ids());
+
     foreach ($matches as $key => $env) {
       // If someone already dibs'd it, we can't dibs it. Them's the rules.
       if ($this->someoneAlreadyCalledDibsOn($site, $env)) {
@@ -208,7 +214,9 @@ class SiteDibsCommand extends TerminusCommand {
         unset($matches[$key]);
       }
     }
-    return array_pop($matches);
+
+    // Array seems to be ordered by time of creation/modification. Pull older.
+    return array_shift($matches);
   }
 
   /**
@@ -259,7 +267,7 @@ class SiteDibsCommand extends TerminusCommand {
     $url = 'http://' . $env . '-' .$site->get('name');
     $url .= '.pantheonsite.io' . $pubDir . '/__dibs.json';
     $url .= '?cb=' . mt_rand();
-    $dibsFile = @file_get_contents($url);
+    $dibsFile = $this->getRemoteDibsFile($url);
 
     // If there's no dibs file, it hasn't been dibs'd.
     if (empty($dibsFile)) {
@@ -289,8 +297,17 @@ class SiteDibsCommand extends TerminusCommand {
     // to be standard across frameworks/versions and are very far toward the end
     // of table names alphabetically.
     $checkStatusCmd = $mysqlCommand . ' -e "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=\'pantheon\' AND TABLE_NAME IN (\'watchdog\', \'wp_users\');"';
-    $response = (int) exec($checkStatusCmd . ' 2> /dev/null', $output, $status);
-    return $response > 0;
+    $response = exec($checkStatusCmd . ' 2> /dev/null', $output, $status);
+
+    if ($status === 0) {
+      return (string) $response === '1';
+    }
+    else {
+      throw new TerminusException("There was a problem checking readiness of {env}. Last message: {message}", [
+        'env' => $env,
+        'message' => array_pop($output),
+      ], 1);
+    }
   }
 
   /**
@@ -351,6 +368,29 @@ class SiteDibsCommand extends TerminusCommand {
     if (is_dir($tempfile)) {
       $this->tmpDirs[] = $tempfile;
       return $tempfile;
+    }
+  }
+
+  /**
+   * Returns a remote dibs file using curl.
+   * @param $url
+   * @return string
+   */
+  protected function getRemoteDibsFile($url) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+    $result = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode == 200) {
+      return $result;
+    }
+    else {
+      return '';
     }
   }
 
