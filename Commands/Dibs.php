@@ -303,10 +303,8 @@ class SiteDibsCommand extends TerminusCommand {
       return (string) $response === '1';
     }
     else {
-      throw new TerminusException("There was a problem checking readiness of {env}. Last message: {message}", [
-        'env' => $env,
-        'message' => array_pop($output),
-      ], 1);
+      // If there was a problem connecting via MySQL, chances are it's not ready.
+      return FALSE;
     }
   }
 
