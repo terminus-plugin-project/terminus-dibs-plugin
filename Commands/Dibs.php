@@ -341,13 +341,15 @@ class SiteDibsCommand extends TerminusCommand {
    *   An associative array of site information.
    */
   protected function getSiteInfo($assoc_args) {
-    if (!isset($this->info)) {
-      $site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
-      $env_id = $this->input()->env(['args' => $assoc_args, 'site' => $site]);
+    $site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
+    $env_id = $this->input()->env(['args' => $assoc_args, 'site' => $site]);
+
+    if (!isset($this->info[$env_id])) {
       $environment = $site->environments->get($env_id);
-      $this->info = $environment->connectionInfo();
+      $this->info[$env_id] = $environment->connectionInfo();
     }
-    return $this->info;
+
+    return $this->info[$env_id];
   }
 
   /**
