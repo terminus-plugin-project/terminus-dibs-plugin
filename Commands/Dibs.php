@@ -52,6 +52,9 @@ class SiteDibsCommand extends TerminusCommand {
    * [--filter=<regex>]
    * : A regex pattern used to filter the pool of environments you are willing to dibs. Defaults to anything but live. (Optional)
    *
+   * [--report]
+   * : Show a summary of environments and their dibs statuses.
+   *
    * @subcommand dibs
    *
    * @param array $args Array of main arguments
@@ -75,6 +78,11 @@ class SiteDibsCommand extends TerminusCommand {
     $this->site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
     $env = isset($assoc_args['env']) ? $assoc_args['env'] : NULL;
     $filter = isset($assoc_args['filter']) ? $assoc_args['filter'] : '^((?!^live$).)*$';
+
+    if (isset($assoc_args['report'])) {
+      $this->output()->outputRecordList($this->getDibsReport($filter));
+      return TRUE;
+    }
 
     // If no environment was provided, try to pick an environment.
     if (empty($env)) {
@@ -201,6 +209,44 @@ class SiteDibsCommand extends TerminusCommand {
         'message' => array_pop($output),
       ], 1);
     }
+  }
+
+  /**
+   * Returns a list of environments and their dibs status.
+   *
+   * @param string $regex
+   *
+   * @return array
+   *   An associative array of dibs statuses, keyed by environment name.
+   */
+  protected function getDibsReport($regex) {
+    $environments = new Environments(['site' => $this->site]);
+    $matches = preg_grep('/' . $regex . '/', $environments->ids());
+    $status = [];
+
+    foreach ($matches as $key => $env) {
+      // Attempt to get dibs details.
+      $dibs = $this->getDibsFor($env);
+
+      // If the dibs file is empty, run an additional check on env readiness.
+      if (empty($dibs)) {
+        $envStatus = $this->envIsReady($env) ? 'Available' : 'Not Ready';
+      }
+      // Otherwise, someone's already called the env.
+      else {
+        $envStatus = 'Already called';
+      }
+
+      $status[$env] = [
+        'Environment' => $env,
+        'Status' => $envStatus,
+        'By' => isset($dibs['by']) ? $dibs['by'] : NULL,
+        'At' => isset($dibs['at']) ? date('D M jS \a\t h:ia', $dibs['at']) : NULL,
+        'Message' => isset($dibs['message']) ? $dibs['message'] : NULL,
+      ];
+    }
+
+    return $status;
   }
 
   /**

@@ -97,6 +97,29 @@ Note: In both cases where no specific environment is provided, only those
 environments that are fully spun-up are dibs'able. If you need to dibs an
 environment as it is being spun up, specify the environment name.
 
+### Dibs Report
+
+If you want to see an overview of environments and their dibs status, you can
+get an environment-by-environment breakdown using the `--report` flag:
+
+```sh
+terminus site dibs --site=your-site --report
+```
+
+Doing so, you'd get a response like this:
+
+```
++-------------+----------------+----------+------------------------+---------------------------+
+| Environment | Status         | By       | At                     | Message                   |
++-------------+----------------+----------+------------------------+---------------------------+
+| dev         | Available      |          |                        |                           |
+| test        | Not Ready      |          |                        |                           |
+| multidev-1  | Already called | username | Thu Nov 3rd at 07:23pm | New feature for the boss. |
++-------------+----------------+----------+------------------------+---------------------------+
+```
+
+Note that you can also supply a `--filter` to limit the environments returned in
+the report.
 
 ## Use-cases
 
