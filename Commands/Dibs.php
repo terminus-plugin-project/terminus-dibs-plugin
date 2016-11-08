@@ -232,9 +232,9 @@ class SiteDibsCommand extends TerminusCommand {
       if (empty($dibs)) {
         $envStatus = $this->envIsReady($env) ? 'Available' : 'Not Ready';
       }
-      // Otherwise, someone's already called the env.
       else {
-        $envStatus = 'Already called';
+        // Otherwise, if the dibs matches the env, it's called.
+        $envStatus = $dibs['for'] === $env ? 'Already called' : 'Available';
       }
 
       $status[$env] = [
