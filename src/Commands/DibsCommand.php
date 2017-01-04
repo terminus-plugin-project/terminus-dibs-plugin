@@ -3,6 +3,7 @@
 namespace Pantheon\Dibs\Commands;
 
 use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
+use Consolidation\OutputFormatters\StructuredData\PropertyList;
 use Pantheon\Terminus\Commands\TerminusCommand;
 use Pantheon\Terminus\Exceptions\TerminusException;
 use Pantheon\Terminus\Models\Environment;
@@ -36,10 +37,20 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    *
    * @param string $message A message about why you're dibs'ing the environment.
    *
-   * @throws \Terminus\Exceptions\TerminusException
+   * @return PropertyList
+   *
+   * @throws TerminusException
    *
    * @command env:dibs
    * @authorize
+   * @field-labels
+   *   id: Environment
+   *   created: Created
+   *   domain: Domain
+   *   locked: Locked
+   *   initialized: Initialized
+   *   connection_mode: Connection Mode
+   *   php_version: PHP Version
    * @usage terminus env:dibs <site>.<env> "<message>"
    *   Call dibs on the <env> environment of <site>, leaving a note containing
    *   <message>.
@@ -50,6 +61,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
     // Call dibs.
     $env = $this->callDibs($environment->id, $message);
     $this->log()->notice('Called dibs on the {env} environment.', ['env' => $env]);
+    return new PropertyList($this->site->getEnvironments()->get($env)->serialize());
   }
 
   /**
@@ -63,8 +75,20 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    * @param string $filter An optional regex pattern used to filter the pool of
    *   environments you are willing to dibs. Defaults to anything but live.
    *
+   * @return PropertyList
+   *
+   * @throws TerminusException
+   *
    * @command site:dibs
    * @authorize
+   * @field-labels
+   *   id: Environment
+   *   created: Created
+   *   domain: Domain
+   *   locked: Locked
+   *   initialized: Initialized
+   *   connection_mode: Connection Mode
+   *   php_version: PHP Version
    * @usage terminus site:dibs <site> "<message>" [<filter>]
    *   Call dibs on any available <site> environment, leaving a note containing
    *   <message>. Available environments may optionally be filtered by the
@@ -74,6 +98,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
     if ($environment = $this->getEnvToDib($site, $filter)) {
       $env = $this->callDibs($environment, $message);
       $this->log()->notice('Called dibs on the {env} environment.', ['env' => $env]);
+      return new PropertyList($this->site->getEnvironments()->get($env)->serialize());
     }
     else {
       throw new TerminusException('Unable to find an environment to call dibs on.', [], 1);
@@ -112,10 +137,20 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    *
    * @param string $site_env Site & environment in the format `site-name.env`
    *
-   * @throws \Terminus\Exceptions\TerminusException
+   * @return PropertyList
+   *
+   * @throws TerminusException
    *
    * @command env:undibs
    * @authorize
+   * @field-labels
+   *   id: Environment
+   *   created: Created
+   *   domain: Domain
+   *   locked: Locked
+   *   initialized: Initialized
+   *   connection_mode: Connection Mode
+   *   php_version: PHP Version
    * @usage terminus env:undibs <site>.<env>
    *   Undibs the <env> and allow others to call dibs.
    */
@@ -125,6 +160,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
     // Undibs the environment by invoking takesies-backsies.
     if ($this->takesiesBacksies($env) === $env->id) {
       $this->log()->notice("Undibs'd the {env} environment.", ['env' => $env->id]);
+      return new PropertyList($this->site->getEnvironments()->get($env->id)->serialize());
     }
   }
 
@@ -138,7 +174,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    * @return string
    *   Returns the name of the dibs'd environment, if successful.
    *
-   * @throws \Terminus\Exceptions\TerminusException
+   * @throws TerminusException
    */
   protected function callDibs($env, $message) {
     // Make sure no one's already called dibs on this site.
@@ -193,7 +229,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    * @return string
    *   Returns the name of the undibs'd environment if successful.
    *
-   * @throws \Terminus\Exceptions\TerminusException
+   * @throws TerminusException
    */
   protected function takesiesBacksies($env) {
     $sftpCommand = $this->getSftpCommand($env->id);
