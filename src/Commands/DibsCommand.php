@@ -1,169 +1,166 @@
 <?php
 
-namespace Terminus\Commands;
+namespace Pantheon\Dibs\Commands;
 
-use Terminus\Collections\Environments;
-use Terminus\Collections\Sites;
-use Terminus\Exceptions\TerminusException;
+use Consolidation\OutputFormatters\StructuredData\RowsOfFields;
+use Pantheon\Terminus\Commands\TerminusCommand;
+use Pantheon\Terminus\Exceptions\TerminusException;
+use Pantheon\Terminus\Models\Environment;
+use Pantheon\Terminus\Site\SiteAwareInterface;
+use Pantheon\Terminus\Site\SiteAwareTrait;
 
 /**
- * Class SiteDibsCommand
+ * Class DibsCommand
  * @command site
  */
-class SiteDibsCommand extends TerminusCommand {
+class DibsCommand extends TerminusCommand implements SiteAwareInterface {
 
-  protected $sites;
+  use SiteAwareTrait;
+
   protected $site;
   protected $info;
 
-  private $version = '0.1.0';
-  private $compatible_terminus_version = '0.13.4';
-
   /**
-   * Create a new site which duplicates the environments, code and content of an existing Pantheon site.
-   *
-   * @param array $options Options to construct the command object
+   * Dibs constructor.
    */
-  public function __construct(array $options = []) {
-    $options['require_login'] = TRUE;
-    parent::__construct($options);
-
+  public function __construct() {
+    parent::__construct();
     date_default_timezone_set('UTC');
-    $this->command_start_time = time();
-
-    $this->sites = new Sites();
   }
 
   /**
    * Call dibs on a site environment.
    *
-   * [--version]
-   * : Show plugin version and compatible Terminus version.
+   * @param string $site_env Site & environment in the format `site-name.env`
+   *   an environment.
    *
-   * [--site=<site>]
-   * : Name of the site for which you want to dibs an environment. (Required)
+   * @param string $message A message about why you're dibs'ing the environment.
    *
-   * [--env=<env>]
-   * : The specific environment you would like to dibs if you know which environment you want ahead of time. (Optional)
-   *
-   * [--message=<message>]
-   * : A message about why you're dibs'ing the environment. (Optional)
-   *
-   * [--filter=<regex>]
-   * : A regex pattern used to filter the pool of environments you are willing to dibs. Defaults to anything but live. (Optional)
-   *
-   * [--report]
-   * : Show a summary of environments and their dibs statuses.
-   *
-   * @subcommand dibs
-   *
-   * @param array $args Array of main arguments
-   * @param array $assoc_args Array of associative arguments
-   * @return null
    * @throws \Terminus\Exceptions\TerminusException
+   *
+   * @command env:dibs
+   * @authorize
+   * @usage terminus env:dibs <site>.<env> "<message>"
+   *   Call dibs on the <env> environment of <site>, leaving a note containing
+   *   <message>.
    */
-  public function envDibs($args, $assoc_args) {
-    // Show version info if necessary.
-    if (isset($assoc_args['version'])) {
-      $this->showVersion();
-      return TRUE;
-    }
-
-    // Check required arguments.
-    if (!isset($assoc_args['site'])) {
-      throw new TerminusException('You must specify a site name via the --site flag.', [], 1);
-    }
-
-    // Set up defaults.
-    $this->site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
-    $env = isset($assoc_args['env']) ? $assoc_args['env'] : NULL;
-    $filter = isset($assoc_args['filter']) ? $assoc_args['filter'] : '^((?!^live$).)*$';
-
-    if (isset($assoc_args['report'])) {
-      $this->output()->outputRecordList($this->getDibsReport($filter));
-      return TRUE;
-    }
-
-    // If no environment was provided, try to pick an environment.
-    if (empty($env)) {
-      $env = $this->getEnvToDib($filter);
-
-      // If we found one, great! Set it up.
-      if (!empty($env)) {
-        $assoc_args['env'] = $env;
-      }
-      // If we still don't have an environment, then none can be dibs'd.
-      else {
-        throw new TerminusException('Unable to find an environment to dibs.', [], 1);
-      }
-    }
+  public function envDibs($site_env, $message) {
+    list($this->site, $environment) = $this->getSiteEnv($site_env);
 
     // Call dibs.
-    $this->output()->outputValue($this->callDibs($assoc_args), 'Called dibs on');
+    $env = $this->callDibs($environment->id, $message);
+    $this->log()->notice('Called dibs on the {env} environment.', ['env' => $env]);
+  }
+
+  /**
+   * Call dibs on a site environment, any environment that's available.
+   *
+   * @param string $site The site name or UUID of the site for which you wish to
+   *   dibs an environment.
+   *
+   * @param string $message The message to set when calling dibs.
+   *
+   * @param string $filter An optional regex pattern used to filter the pool of
+   *   environments you are willing to dibs. Defaults to anything but live.
+   *
+   * @command site:dibs
+   * @authorize
+   * @usage terminus site:dibs <site> "<message>" [<filter>]
+   *   Call dibs on any available <site> environment, leaving a note containing
+   *   <message>. Available environments may optionally be filtered by the
+   *   <filter> regex pattern applied to environment names.
+   */
+  public function siteDibsAny($site, $message, $filter = '^((?!^live$).)*$') {
+    if ($environment = $this->getEnvToDib($site, $filter)) {
+      $env = $this->callDibs($environment, $message);
+      $this->log()->notice('Called dibs on the {env} environment.', ['env' => $env]);
+    }
+    else {
+      throw new TerminusException('Unable to find an environment to call dibs on.', [], 1);
+    }
+  }
+
+  /**
+   * Return a report of environments and their dibs status.
+   *
+   * @param string $site The site name or UUID of the site for which you wish to
+   *   view the dibs report.
+   *
+   * @param string $filter An optional regex pattern used to filter the pool of
+   *   environments for which you wish to view the report.
+   *
+   * @return RowsOfFields
+   *
+   * @command site:dibs:report
+   * @authorize
+   * @field-labels
+   *   env: Environment
+   *   status: Status
+   *   by: By
+   *   at: At
+   *   message: Message
+   * @usage terminus site:dibs:report <site> [<filter>]
+   *   Return a report of environments and their dibs status, optionally
+   *   filtered by the <filter> regex pattern applied to environment names.
+   */
+  public function envDibsReport($site, $filter = '^((?!^live$).)*$') {
+    return new RowsOfFields($this->getDibsReport($site, $filter));
   }
 
   /**
    * Un-dibs a site environment.
    *
-   * [--site=<site>]
-   * : Name of the site for which you want to un-dibs an environment. (Required)
+   * @param string $site_env Site & environment in the format `site-name.env`
    *
-   * [--env=<env>]
-   * : The specific environment you would like to un-dibs. (Required)
-   *
-   * @subcommand undibs
-   *
-   * @param array $args Array of main arguments
-   * @param array $assoc_args Array of associative arguments
-   * @return null
    * @throws \Terminus\Exceptions\TerminusException
+   *
+   * @command env:undibs
+   * @authorize
+   * @usage terminus env:undibs <site>.<env>
+   *   Undibs the <env> and allow others to call dibs.
    */
-  public function envUndibs($args, $assoc_args) {
-    // Check required arguments.
-    if (!isset($assoc_args['site']) || !isset($assoc_args['env'])) {
-      throw new TerminusException('You must specify a site name (--site) and environment (--env).', [], 1);
-    }
-
-    // Set up defaults.
-    $this->site = $this->sites->get($this->input()->siteName(['args' => $assoc_args]));
+  public function envUndibs($site_env) {
+    list($this->site, $env) = $this->getSiteEnv($site_env);
 
     // Undibs the environment by invoking takesies-backsies.
-    $this->output()->outputValue($this->takesiesBacksies($assoc_args), "Undibs'd");
+    if ($this->takesiesBacksies($env) === $env->id) {
+      $this->log()->notice("Undibs'd the {env} environment.", ['env' => $env->id]);
+    }
   }
 
   /**
    * Attempts to call dibs given an array of arguments containing a site name
    * and environment name.
    *
-   * @param array $assoc_args
+   * @param string $env
+   * @param string $message
    *
    * @return string
    *   Returns the name of the dibs'd environment, if successful.
    *
    * @throws \Terminus\Exceptions\TerminusException
    */
-  protected function callDibs($assoc_args) {
+  protected function callDibs($env, $message) {
     // Make sure no one's already called dibs on this site.
-    if ($existingDibs = $this->getDibsFor($assoc_args['env'])) {
+    if ($existingDibs = $this->getDibsFor($env)) {
       throw new TerminusException('{Who} already called dibs on {env} on {date}: {message}', [
         'Who' => $existingDibs['by'] === exec('whoami') ? 'You' : $existingDibs['by'],
-        'env' => $assoc_args['env'],
+        'env' => $env,
         'date' => date('D M jS \a\t h:ia', $existingDibs['at']),
         'message' => $existingDibs['message'],
       ], 1);
     }
 
     // Prepare to call dibs.
-    $sftpCommand = $this->getSftpCommand($assoc_args);
+    $sftpCommand = $this->getSftpCommand($env);
     $workdir = $this->getTempDir();
     chdir($workdir);
 
     // First, write a dibs file with some metadata.
-    $message = isset($assoc_args['message']) ? $assoc_args['message'] : 'Dibs!';
     $dibs = [
       'by' => exec('whoami'),
       'at' => time(),
-      'for' => $assoc_args['env'],
+      'for' => $env,
       'message' => $message,
     ];
     $put_succeeded = file_put_contents('__dibs.json', json_encode($dibs));
@@ -178,11 +175,11 @@ class SiteDibsCommand extends TerminusCommand {
 
     // If we succeeded, return the environment name.
     if ($status === 0) {
-      return $assoc_args['env'];
+      return $env;
     }
     else {
       throw new TerminusException('There was a problem calling dibs on {env}. Last message: {message}', [
-        'env' => $assoc_args['env'],
+        'env' => $env,
         'message' => array_pop($output),
       ], 1);
     }
@@ -191,21 +188,22 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Attempts to remove the dibs file from the given site/env.
    *
-   * @param array $assoc_args
+   * @param Environment $env
+   *
    * @return string
    *   Returns the name of the undibs'd environment if successful.
    *
    * @throws \Terminus\Exceptions\TerminusException
    */
-  protected function takesiesBacksies($assoc_args) {
-    $sftpCommand = $this->getSftpCommand($assoc_args);
+  protected function takesiesBacksies($env) {
+    $sftpCommand = $this->getSftpCommand($env->id);
     exec("(echo 'cd files' && echo 'rm __dibs.json') | $sftpCommand 2> /dev/null", $output, $status);
     if ($status === 0) {
-      return $assoc_args['env'];
+      return $env->id;
     }
     else {
       throw new TerminusException("There was a problem undibs'ing {env}. Last message: {message}", [
-        'env' => $assoc_args['env'],
+        'env' => $env->id,
         'message' => array_pop($output),
       ], 1);
     }
@@ -214,13 +212,15 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Returns a list of environments and their dibs status.
    *
+   * @param string $site
    * @param string $regex
    *
    * @return array
-   *   An associative array of dibs statuses, keyed by environment name.
+   *   An  array of dibs statuses.
    */
-  protected function getDibsReport($regex) {
-    $environments = new Environments(['site' => $this->site]);
+  protected function getDibsReport($site, $regex) {
+    $this->site = $this->getSite($site);
+    $environments = $this->site->getEnvironments();
     $matches = preg_grep('/' . $regex . '/', $environments->ids());
     $status = [];
 
@@ -237,12 +237,12 @@ class SiteDibsCommand extends TerminusCommand {
         $envStatus = $dibs['for'] === $env ? 'Already called' : 'Available';
       }
 
-      $status[$env] = [
-        'Environment' => $env,
-        'Status' => $envStatus,
-        'By' => isset($dibs['by']) ? $dibs['by'] : NULL,
-        'At' => isset($dibs['at']) ? date('D M jS \a\t h:ia', $dibs['at']) : NULL,
-        'Message' => isset($dibs['message']) ? $dibs['message'] : NULL,
+      $status[] = [
+        'env' => $env,
+        'status' => $envStatus,
+        'by' => isset($dibs['by']) ? $dibs['by'] : NULL,
+        'at' => isset($dibs['at']) ? date('D M jS \a\t h:ia', $dibs['at']) : NULL,
+        'message' => isset($dibs['message']) ? $dibs['message'] : NULL,
       ];
     }
 
@@ -252,14 +252,16 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Returns an environment to call dibs on, given a regex filter.
    *
+   * @param string $site
    * @param string $regex
    *
    * @return string|NULL
    *   The as-yet undib'd environment, or NULL if all environments have already
    *   been spoken-for.
    */
-  protected function getEnvToDib($regex) {
-    $environments = new Environments(['site' => $this->site]);
+  protected function getEnvToDib($site, $regex) {
+    $this->site = $this->getSite($site);
+    $environments = $this->site->getEnvironments();
     $matches = preg_grep('/' . $regex . '/', $environments->ids());
 
     foreach ($matches as $key => $env) {
@@ -286,20 +288,6 @@ class SiteDibsCommand extends TerminusCommand {
     else {
       return '/sites/default/files';
     }
-  }
-
-  /**
-   * Outputs plugin information for debugging/support.
-   */
-  protected function showVersion() {
-    $labels = [
-      'version' => 'Plugin (dibs) Version',
-      'terminus_version' => 'Compatible Terminus Version',
-    ];
-    $this->output()->outputRecord([
-      'version' => $this->version,
-      'terminus_version' => $this->compatible_terminus_version,
-    ], $labels);
   }
 
   /**
@@ -341,7 +329,7 @@ class SiteDibsCommand extends TerminusCommand {
    *   we know).
    */
   protected function envIsReady($env) {
-    $mysqlCommand = $this->getMySqlCommand(['site' => $this->site->get('name'), 'env' => $env]);
+    $mysqlCommand = $this->getMySqlCommand($env);
     // Check to see if "watchdog" and "wp_users" tables exist. These tables seem
     // to be standard across frameworks/versions and are very far toward the end
     // of table names alphabetically.
@@ -360,44 +348,42 @@ class SiteDibsCommand extends TerminusCommand {
   /**
    * Returns the SFTP command to connect to a given site/env.
    *
-   * @param array $assoc_args
+   * @param string $env
    *
    * @return string
    */
-  protected function getSftpCommand($assoc_args) {
-    $info = $this->getSiteInfo($assoc_args);
+  protected function getSftpCommand($env) {
+    $info = $this->getSiteInfo($env);
     return $info['sftp_command'];
   }
 
   /**
    * Returns the MySQL command to connect to a given site/env.
    *
-   * @param array $assoc_args
+   * @param string $env
    *
    * @return string
    */
-  protected function getMySqlCommand($assoc_args) {
-    $info = $this->getSiteInfo($assoc_args);
+  protected function getMySqlCommand($env) {
+    $info = $this->getSiteInfo($env);
     return $info['mysql_command'];
   }
 
   /**
    * Returns site information for a given site/env.
    *
-   * @param array $assoc_args
+   * @param string $env
    *
    * @return array
    *   An associative array of site information.
    */
-  protected function getSiteInfo($assoc_args) {
-    $env_id = $assoc_args['env'];
-
-    if (!isset($this->info[$env_id])) {
-      $environment = $this->site->environments->get($env_id);
-      $this->info[$env_id] = $environment->connectionInfo();
+  protected function getSiteInfo($env) {
+    if (!isset($this->info[$env])) {
+      $environment = $this->site->getEnvironments()->get($env);
+      $this->info[$env] = $environment->connectionInfo();
     }
 
-    return $this->info[$env_id];
+    return $this->info[$env];
   }
 
   /**

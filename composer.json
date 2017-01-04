@@ -1,0 +1,14 @@
+{
+  "name": "tableau-mkt/dibs",
+  "description": "Dibs - A Terminus plugin that allows you to call dibs on your Pantheon environments.",
+  "license": "MIT",
+  "type": "terminus-plugin",
+  "autoload": {
+    "psr-4": { "Pantheon\\Dibs\\": "src" }
+  },
+  "extra": {
+    "terminus": {
+      "compatible-version": "^1"
+    }
+  }
+}
