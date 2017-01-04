@@ -7,41 +7,35 @@ in the context of build automation and continuous integration.
 
 ## Installation
 
-Place the contents of this repository into `~/terminus/plugins/dibs` or the
+Place the contents of this repository into `~/.terminus/plugins/dibs` or the
 location of your `$TERMINUS_PLUGINS_DIR`. You may do so either by cloning this
 repository using git, or by un-compressing the tarball from a release on GitHub.
 
-Verify that installation succeeded by running `terminus help site dibs`
+Verify that installation succeeded by running `terminus help env:dibs`
 
 
 ## Usage
 
 ### Dibs'ing a specific environment
 
-To call dibs on the `dev` environment run the following:
+To call dibs on the `dev` environment on a site called `your-site` run:
 
 ```sh
-terminus site dibs --site=your-site --env=dev
+terminus env:dibs your-site.dev "Need the dev environment for a thing."
 ```
 
 If the call succeeded, you should see a message like the following:
 
 ```
-Called dibs on: dev
+[notice] Called dibs on the dev environment.
 ```
 
-If you or anyone else on your team attempt to call dibs on `dev` again, you'll
-see an error message.
+...In addition to details about the environment.
 
-### Providing a message
-
-Let your colleagues know why you dibs'd your environment by providing a message!
-
-```sh
-terminus site dibs --site=your-site --env=test --message="Testing new homepage layout"
-```
-
-When someone attempts to dibs the same environment, they'll see your note.
+Note that you must leave a note when calling dibs. If you or anyone else on your
+team attempt to call dibs on `dev` again, you'll see an error containing the
+message originally used to call dibs. Be sure to leave meaningful notes for your
+colleagues!
 
 ### Un-dibs'ing an environment
 
@@ -49,29 +43,32 @@ Once you're done using your environment, you can _undibs_ it by running the
 following command:
 
 ```sh
-terminus site undibs --site=your-site --env=dev
+terminus env:undibs your-site.env
 ```
 
 If the call succeeded, you should see a message like the following:
 
 ```
-Undibs'd: dev
+[notice] Undibs'd the dev environment.
 ```
+
+...In addition to details about the environment.
 
 Afterward, you or anyone else on your team may call dibs on `dev` again.
 
 ### Dibs'ing any available environment
 
-If you don't care which environment you dibs, you may run the command without
-providing an environment name. Dibs will attempt to find an environment that
-hasn't already been dibs'd.
+If you don't care which environment you call, you may run the following command,
+which doesn't require an environment name. Dibs will attempt to find an
+environment that hasn't already been called.
 
 ```sh
-terminus site dibs --site=your-site
+terminus site:dibs your-site "Testing some layout tweaks"
 ```
 
 If an environment was found, you'll see the same success message as shown above,
-including the name of the dibs'd environment.
+including the name of the dibs'd environment. Additionally, details about the
+dibs'd environment will be returned.
 
 If all environments are spoken for, you'll see an error message
 
@@ -87,7 +84,7 @@ If you'd like to dibs an environment, but wish to limit the environments made
 available for dibs'ing, you can do so by providing a regex pattern as a filter.
 
 ```sh
-terminus site dibs --site=your-site --filter='^((?!^(dev|test|live)$).)*$'
+terminus site:dibs your-site "Experiments" '^((?!^(dev|test|live)$).)*$'
 ```
 
 The above command would call dibs on a multidev, ignoring the `dev`, `test`, and
@@ -100,26 +97,30 @@ environment as it is being spun up, specify the environment name.
 ### Dibs Report
 
 If you want to see an overview of environments and their dibs status, you can
-get an environment-by-environment breakdown using the `--report` flag:
+get an environment-by-environment breakdown using the following command:
 
 ```sh
-terminus site dibs --site=your-site --report
+terminus site:dibs:report your-site
 ```
 
 Doing so, you'd get a response like this:
 
 ```
-+-------------+----------------+----------+------------------------+---------------------------+
-| Environment | Status         | By       | At                     | Message                   |
-+-------------+----------------+----------+------------------------+---------------------------+
-| dev         | Available      |          |                        |                           |
-| test        | Not Ready      |          |                        |                           |
-| multidev-1  | Already called | username | Thu Nov 3rd at 07:23pm | New feature for the boss. |
-+-------------+----------------+----------+------------------------+---------------------------+
+ ------------- ---------------- ---------- ------------------------ --------------------------
+  Environment   Status           By         At                       Message
+ ------------- ---------------- ---------- ------------------------ --------------------------
+  dev           Available
+  test          Not Ready
+  multidev-1    Already called   username   Thu Nov 3rd at 07:23pm   New feature for the boss
+ ------------- ---------------- ---------- ------------------------ --------------------------
 ```
 
-Note that you can also supply a `--filter` to limit the environments returned in
-the report.
+Note that you can also supply a regex filter to limit the environments returned
+in the report:
+
+```sh
+terminus site:dibs:report your-site '^((?!^(dev|test|live)$).)*$'
+```
 
 ## Use-cases
 
@@ -136,7 +137,7 @@ the same area of the site, how do you figure out who uses `dev` vs. `test`?
 This plugin can help manage work!
 
 ```sh
-terminus site dibs --site=your-site --env=test
+terminus env:dibs your-site.test "New features for the boss"
 ```
 
 ### Speed up CI builds
@@ -150,8 +151,12 @@ environments around, named using a convention like `ci1`, `ci2`, etc. Instead of
 spinning up/tearing down environments, just call dibs!
 
 ```sh
-export PENV=`terminus site dibs --site=your-site --filter='^ci\d$' --format=bash`
+export PENV=`terminus site:dibs --field=id -- your-site "Using env for build." '^ci\d$'`
 ```
+
+Note you can also specify multiple fields (`--fields=id,domain`) (rather than
+one) or specify an alternative format (`--format=json`) if desired. For more
+details, run: `terminus help site:dibs`
 
 ### Multidev management
 
@@ -164,16 +169,19 @@ etc. Call dibs on an environment before you start working on a feature or as
 soon as it's ready for QA.
 
 ```sh
-terminus site dibs --site=your-site --filter='^dev\d+$'
+terminus site:dibs your-site "Feature name/number" '^dev\d+$'
 ```
 
-## Warnings
+## Internals
 
 In order to maintain state about whether or not an environment is _dibs'd_, this
 plugin writes a small JSON file to a publicly accessible location in the site
-environment's file system. If you run any file-based workflow operations, dibs
-state will be lost.
+environment's file system. If you run any file-based workflow operations (like
+cloning from `live` to your dibs'd environment), dibs state will be lost.
 
 This plugin _is_ smart enough to recognize when an environment has been created
 from a previously dibs'd environment (e.g. a clone of db/files from one
-environment to another), and will allow the target site to be dibs'd.
+environment to another), and will allow the target site to be dibs'd (like if
+`dev` was already dib's and you spun up `multidev-1` from `dev`, even though the
+dibs JSON from `dev` would exist on `multidev-1`, this plugin will still allow
+you to call dibs on `multidev-1` anyway).
