@@ -1,5 +1,5 @@
 {
-  "name": "tableau-mkt/dibs",
+  "name": "terminus-plugin-project/terminus-dibs-plugin",
   "description": "Dibs - A Terminus plugin that allows you to call dibs on your Pantheon environments.",
   "license": "MIT",
   "type": "terminus-plugin",
