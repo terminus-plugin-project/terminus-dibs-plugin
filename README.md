@@ -7,9 +7,17 @@ in the context of build automation and continuous integration.
 
 ## Installation
 
-Place the contents of this repository into `~/.terminus/plugins/dibs` or the
-location of your `$TERMINUS_PLUGINS_DIR`. You may do so either by cloning this
-repository using git, or by un-compressing the tarball from a release on GitHub.
+The simplest way to install this plugin is via Composer! Run the following
+command to install this plugin:
+
+```sh
+composer create-project --stability=beta -d ~/.terminus/plugins/ terminus-plugin-project/terminus-dibs-plugin:~1
+```
+
+If you do not wish to use Composer, place the contents of this repository into
+`~/.terminus/plugins/dibs` or the location of your `$TERMINUS_PLUGINS_DIR`. You
+may do so either by cloning this repository using git, or by un-compressing the
+tarball from a release on GitHub.
 
 Verify that installation succeeded by running `terminus help env:dibs`
 
