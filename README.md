@@ -130,6 +130,13 @@ in the report:
 terminus site:dibs:report your-site '^((?!^(dev|test|live)$).)*$'
 ```
 
+You can also supply in seconds a filter to only see a list of environments that have been dibs'd for a certain amount of time:
+
+```sh
+terminus site:dibs:report tableau '^((?!^(dev|test|live)$).)*$' 1800
+```
+
+
 ## Use-cases
 
 This plugin assumes that you have persistent or semi-persistent environments

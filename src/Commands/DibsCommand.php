@@ -114,6 +114,8 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    * @param string $filter An optional regex pattern used to filter the pool of
    *   environments for which you wish to view the report.
    *
+   * @param integer $duration An optional time threshold (seconds) for duration that an environment has been dibs'd.
+   *
    * @return RowsOfFields
    *
    * @command site:dibs:report
@@ -124,12 +126,13 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    *   by: By
    *   at: At
    *   message: Message
-   * @usage terminus site:dibs:report <site> [<filter>]
+   * @usage terminus site:dibs:report <site> [<filter>] [<duration>]
    *   Return a report of environments and their dibs status, optionally
-   *   filtered by the <filter> regex pattern applied to environment names.
+   *   filtered by the <filter> regex pattern applied to environment names
+   *   and/or <duration> in seconds for how long a envrionment has been dibs'd.
    */
-  public function envDibsReport($site, $filter = '^((?!^live$).)*$') {
-    return new RowsOfFields($this->getDibsReport($site, $filter));
+  public function envDibsReport($site, $filter = '^((?!^live$).)*$', $duration = 0) {
+    return new RowsOfFields($this->getDibsReport($site, $filter, $duration));
   }
 
   /**
@@ -254,7 +257,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    * @return array
    *   An  array of dibs statuses.
    */
-  protected function getDibsReport($site, $regex) {
+  protected function getDibsReport($site, $regex, $threshold) {
     $this->site = $this->getSite($site);
     $environments = $this->site->getEnvironments();
     $matches = preg_grep('/' . $regex . '/', $environments->ids());
@@ -273,13 +276,18 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
         $envStatus = $dibs['for'] === $env ? 'Already called' : 'Available';
       }
 
-      $status[] = [
-        'env' => $env,
-        'status' => $envStatus,
-        'by' => isset($dibs['by']) ? $dibs['by'] : NULL,
-        'at' => isset($dibs['at']) ? date('D M jS \a\t h:ia', $dibs['at']) : NULL,
-        'message' => isset($dibs['message']) ? $dibs['message'] : NULL,
-      ];
+      // Further filter report by the age the of the dibs if a threshold was set.
+      $age = isset($dibs['at']) ? time() - isset($dibs['at']) : 0;
+
+      if ($age > $threshold || $threshold == 0) {
+        $status[] = [
+          'env' => $env,
+          'status' => $envStatus,
+          'by' => isset($dibs['by']) ? $dibs['by'] : NULL,
+          'at' => isset($dibs['at']) ? date('D M jS \a\t h:ia', $dibs['at']) : NULL,
+          'message' => isset($dibs['message']) ? $dibs['message'] : NULL,
+        ];
+      }
     }
 
     return $status;
@@ -463,5 +471,4 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
       return '';
     }
   }
-
 }
