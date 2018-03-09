@@ -277,7 +277,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
       }
 
       // Further filter report by the age the of the dibs if a threshold was set.
-      $age = isset($dibs['at']) ? time() - isset($dibs['at']) : 0;
+      $age = isset($dibs['at']) ? time() - $dibs['at'] : 0;
 
       if ($age > $threshold['older-than'] || $threshold['older-than'] == 0) {
         $status[] = [
