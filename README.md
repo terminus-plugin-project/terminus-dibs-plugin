@@ -133,7 +133,7 @@ terminus site:dibs:report your-site '^((?!^(dev|test|live)$).)*$'
 You can also use a flag, ```--older-than```, to further filter down environments that have been dibs'd for a given amount of time (in seconds):
 
 ```sh
-terminus site:dibs:report tableau '^((?!^(dev|test|live)$).)*$' --older-than=1800
+terminus site:dibs:report your-site '^((?!^(dev|test|live)$).)*$' --older-than=1800
 ```
 
 
