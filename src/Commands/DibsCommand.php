@@ -114,7 +114,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    * @param string $filter An optional regex pattern used to filter the pool of
    *   environments for which you wish to view the report.
    *
-   * @param integer $duration An optional time threshold (seconds) for duration that an environment has been dibs'd.
+   * @option integer $older-than An optional time threshold (seconds) for duration that an environment has been dibs'd.
    *
    * @return RowsOfFields
    *
@@ -126,13 +126,13 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
    *   by: By
    *   at: At
    *   message: Message
-   * @usage terminus site:dibs:report <site> [<filter>] [<duration>]
+   * @usage terminus site:dibs:report <site> [<filter>] --older-than
    *   Return a report of environments and their dibs status, optionally
    *   filtered by the <filter> regex pattern applied to environment names
-   *   and/or <duration> in seconds for how long a envrionment has been dibs'd.
+   *   and/or --older-than flag in seconds for how long a envrionment has been dibs'd.
    */
-  public function envDibsReport($site, $filter = '^((?!^live$).)*$', $duration = 0) {
-    return new RowsOfFields($this->getDibsReport($site, $filter, $duration));
+  public function envDibsReport($site, $filter = '^((?!^live$).)*$', $options = ['older-than' => 0,]) {
+    return new RowsOfFields($this->getDibsReport($site, $filter, $options));
   }
 
   /**
@@ -279,7 +279,7 @@ class DibsCommand extends TerminusCommand implements SiteAwareInterface {
       // Further filter report by the age the of the dibs if a threshold was set.
       $age = isset($dibs['at']) ? time() - isset($dibs['at']) : 0;
 
-      if ($age > $threshold || $threshold == 0) {
+      if ($age > $threshold['older-than'] || $threshold['older-than'] == 0) {
         $status[] = [
           'env' => $env,
           'status' => $envStatus,
