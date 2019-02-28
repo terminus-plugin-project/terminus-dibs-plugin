@@ -200,3 +200,7 @@ environment to another), and will allow the target site to be dibs'd (like if
 `dev` was already dib's and you spun up `multidev-1` from `dev`, even though the
 dibs JSON from `dev` would exist on `multidev-1`, this plugin will still allow
 you to call dibs on `multidev-1` anyway).
+
+## Notes
+- Compatibility with [`terminus 2.0.x`](https://github.com/pantheon-systems/terminus/releases/tag/2.0.0):
+    - 1.x versions of Dibs is compatible with `1.x` up to `2.0.0` versions of Terminus.
